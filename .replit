@@ -1,0 +1,16 @@
+run = "bash start.sh"
+
+entrypoint = "start.sh"
+
+[nix]
+channel = "stable-24_05"
+
+[env]
+LANGFUSE_HOST = "http://localhost:3000"
+
+[deployment]
+run = ["bash", "start.sh"]
+
+[[ports]]
+localPort = 3000
+externalPort = 80
