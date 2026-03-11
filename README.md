@@ -1,16 +1,39 @@
-# Langfuse Self-Hosted (Replit)
+# Langfuse v3 Self-Hosted (Replit)
 
-Self-hosted [Langfuse](https://langfuse.com) setup with Docker Compose, configured for Replit, plus Python scripts to seed and stream test data.
+Self-hosted [Langfuse v3](https://langfuse.com) setup with Docker Compose, configured for Replit, plus Python scripts to seed and stream test data.
 
 ## What's Included
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.yml` | Langfuse server + Postgres |
-| `start.sh` | One-command startup (installs deps, launches services) |
+| `docker-compose.yml` | Full v3 stack: Langfuse web + worker, Postgres, ClickHouse, Redis, MinIO |
+| `start.sh` | One-command startup (installs deps, launches all services) |
 | `scripts/seed_test_data.py` | Batch-create realistic traces, spans, generations, and scores |
 | `scripts/stream_test_data.py` | Continuously stream traces at a configurable rate |
 | `scripts/test_api_direct.py` | Raw REST API examples (no SDK) |
+
+## Architecture (Langfuse v3)
+
+```
+                    ┌──────────────────┐
+         port 3000  │  langfuse-web    │  UI + API
+                    │  (langfuse:3)    │
+                    └────────┬─────────┘
+                             │
+                    ┌────────┴─────────┐
+                    │  langfuse-worker  │  Async event processing
+                    │  (langfuse-      │
+                    │   worker:3)      │
+                    └──┬───┬───┬───┬───┘
+         ┌─────────────┘   │   │   └──────────────┐
+         ▼                 ▼   ▼                   ▼
+  ┌─────────────┐  ┌────────────┐  ┌──────────┐  ┌──────────┐
+  │  Postgres   │  │ ClickHouse │  │  Redis   │  │  MinIO   │
+  │  (port 5432)│  │ (port 8123)│  │ (6379)   │  │ (9090)   │
+  │  Relational │  │  OLAP for  │  │ Queue +  │  │ S3 blob  │
+  │  data       │  │  traces    │  │ cache    │  │ storage  │
+  └─────────────┘  └────────────┘  └──────────┘  └──────────┘
+```
 
 ## Quick Start
 
@@ -20,7 +43,7 @@ Self-hosted [Langfuse](https://langfuse.com) setup with Docker Compose, configur
 bash start.sh
 ```
 
-This spins up Postgres and the Langfuse server on **port 3000**.
+This spins up all 6 services. First run pulls images and may take a few minutes.
 
 ### 2. Create a Project
 
@@ -64,25 +87,17 @@ python scripts/test_api_direct.py
 - **Error simulation**: ~5% of streamed traces include errors
 - **Sessions and users**: grouped by session and user IDs for dashboard testing
 
-## Architecture
-
-```
-┌─────────────┐     ┌──────────────────┐
-│  Postgres    │◄────│  Langfuse Server │──── port 3000
-│  (port 5432) │     │  (langfuse:2)    │
-└─────────────┘     └──────────────────┘
-                           ▲
-                    ┌──────┴───────┐
-                    │ Python SDK / │
-                    │ REST API     │
-                    └──────────────┘
-```
-
 ## Useful Commands
 
 ```bash
-# View logs
-docker-compose logs -f langfuse-server
+# View logs (all services)
+docker-compose logs -f
+
+# View only the web server logs
+docker-compose logs -f langfuse-web
+
+# View worker logs
+docker-compose logs -f langfuse-worker
 
 # Restart services
 docker-compose restart
@@ -90,6 +105,10 @@ docker-compose restart
 # Stop everything
 docker-compose down
 
-# Stop and delete all data
+# Stop and delete ALL data (Postgres, ClickHouse, MinIO, Redis)
 docker-compose down -v
 ```
+
+## Resource Requirements
+
+Langfuse v3 recommends at least **2 CPUs and 4 GB RAM** for the full stack. On Replit, use a plan that provides sufficient resources for Docker.
